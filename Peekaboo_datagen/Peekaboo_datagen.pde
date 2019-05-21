@@ -29,6 +29,7 @@ int pictureTimer = 0;
 int goingOutsideTimer = 0;
 int goingInsideTimer = 0;
 int seatedTimer = 0;
+int dataTimer = 0;
 int[] timersIR = {0,0,0,0};
 
 // if timers are set
@@ -128,6 +129,7 @@ void serialEvent(Serial myPort) {
       }
       if(values[0] < LIMIT) {
         goingInsideTimer = globalTimer;
+        dataTimer = globalTimer;
         if(globalTimer-goingOutsideTimer <= 30 && !busy) {
           inside = max(inside-1,0);
           busy = true;
@@ -136,21 +138,25 @@ void serialEvent(Serial myPort) {
       
       if(values[1] < LIMIT) {
         goingOutsideTimer = globalTimer;
+        dataTimer = globalTimer;
         if(globalTimer-goingInsideTimer <= 30 && !busy) {
           inside += 1;
           busy = true;
         }
       }
       
-      if(globalTimer-goingInsideTimer > 30 && globalTimer-goingOutsideTimer > 30) {
+      if(values[0] > 40 && values[1] > 40 && globalTimer-dataTimer > 10) {
         busy = false;
       }
       
-      if(globalTimer % 600 == 0) {
+      if(globalTimer % 100 == 0) {
         oocsi.channel("sensordata")
-            .data(names[0], values[0]).data(names[1], values[1])
-            .data(names[2], values[2]).data(names[3], values[3])
-            .data(names[4], values[4]).data(names[5], values[5])
+            .data("sensorvalue1", values[0])
+            .data("sensorvalue2", values[1])
+            .data("sensorvalue3", values[2]*5)
+            .data("sensorvalue4", values[3]*10)
+            .data("sensorvalue5", values[4]*15)
+            .data("sensorvalue6", values[5]*20)
             .send();
       }
     }
