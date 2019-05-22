@@ -1,5 +1,5 @@
 /**  
- *  DBSU10 ProxAlert Hiders
+ *  DAAU10 MIMIC
  *  @author Iris Verwegen, group U05
  *  @since 06/02/2019
  */
