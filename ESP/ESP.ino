@@ -22,6 +22,7 @@ const char* hostserver = "192.168.4.1";
 OOCSI oocsi = OOCSI();
 
 // pin numbers
+int button = 15;
 int trigPinOutside = 2;
 int echoPinOutside = 4;
 int trigPinInside = 13;
@@ -43,6 +44,8 @@ int values [6] = {100,100,1,1,1,1};
 // the names of all the sensors
 String names [6] = {"sonarOutside","sonarInside","firstIR","secondIR","thirdIR","fourthIR"};
 boolean busy = false;
+boolean buttonPressed = false;
+boolean isPressing = false;
 
 // TIMERS
 int globalTimer = 0;
@@ -63,6 +66,7 @@ boolean timersIRSet [4] = {false, false, false, false};
 #define TOOLONG 300
 
 void setup() {
+    pinMode(button, INPUT);
     pinMode(firstIR,INPUT);
     pinMode(secondIR,INPUT);
     pinMode(thirdIR,INPUT);
@@ -86,13 +90,15 @@ void loop() {
     SonarSensor(trigPinInside, echoPinInside);
     values[1] = distance;
     // first IR sensor
-    values[2] = digitalRead(12);
+    values[2] = digitalRead(firstIR);
     // first IR sensor
-    values[3] = digitalRead(14);
+    values[3] = digitalRead(secondIR);
     // first IR sensor
-    values[4] = digitalRead(18);
+    values[4] = digitalRead(thirdIR);
     // first IR sensor
-    values[5] = digitalRead(19);
+    values[5] = digitalRead(fourthIR);
+    // button push
+    int buttonState = digitalRead(button);
 
     // Prints the distance on the Serial Monitor
     Serial.println(globalTimer);
@@ -103,18 +109,25 @@ void loop() {
 //    Serial.print("IR: ");
 //    Serial.println(digitalRead(12));
 
+    if(buttonState == HIGH && !isPressed) {
+        buttonPressed = !buttonPressed;
+        isPressed = true;
+    } else if(buttonState = LOW {
+        isPressed = false;
+    }
+    
     globalTimer += 1;
   
     // corner case: more people could be seated than detected
     inside = max(inside, nrSeated());
 
-    if(inside > 0 && !flagRaised) {
+    if((inside > 0 || buttonPressed) && !flagRaised) {
         // if people are present, raise the flag
         oocsi.newMessage("peekaboo_control");
             oocsi.addString("flagUp", "");
             oocsi.sendMessage();
         flagRaised = true;
-    } else if (inside < 1 && flagRaised) {
+    } else if (inside < 1 && flagRaised && !buttonPressed) {
         // if no-one is present, lower the flag
         oocsi.newMessage("peekaboo_control");
             oocsi.addString("flagDown", "");
