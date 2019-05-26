@@ -33,33 +33,69 @@ int fourthIR = 19;
 
 // defines variables
 long duration, distance;
-long sonarOutside, sonarInside;
+// shows which IR sensors are triggered
+boolean seated [4] = {false,false,false,false};
+// shows how many are counted to be inside  
+int inside = 0;
+boolean flagRaised = false;
+// the values of all sensors
+int values [6] = {100,100,1,1,1,1};
+// the names of all the sensors
+String names [6] = {"sonarOutside","sonarInside","firstIR","secondIR","thirdIR","fourthIR"};
+boolean busy = false;
+
+// TIMERS
+int globalTimer = 0;
+int pictureTimer = 0;
+int goingOutsideTimer = 0;
+int goingInsideTimer = 0;
+int seatedTimer = 0;
+int dataTimer = 0;
+int timersIR [4] = {0,0,0,0};
+
+// if timers are set
+boolean seatedTimerSet = false;
+boolean timersIRSet [4] = {false, false, false, false};
+
+// the limit for the sonar sensors
+#define LIMIT 40
+// the limit of seating duration
+#define TOOLONG 300
 
 void setup() {
-   pinMode(firstIR,INPUT);
-   pinMode(secondIR,INPUT);
-   pinMode(thirdIR,INPUT);
-   pinMode(fourthIR,INPUT);
-   pinMode(trigPinOutside, OUTPUT);
-   pinMode(echoPinOutside, INPUT);
-   pinMode(trigPinInside, OUTPUT);
-   pinMode(echoPinInside, INPUT);
-   Serial.begin(115200);
+    pinMode(firstIR,INPUT);
+    pinMode(secondIR,INPUT);
+    pinMode(thirdIR,INPUT);
+    pinMode(fourthIR,INPUT);
+    pinMode(trigPinOutside, OUTPUT);
+    pinMode(echoPinOutside, INPUT);
+    pinMode(trigPinInside, OUTPUT);
+    pinMode(echoPinInside, INPUT);
+    Serial.begin(115200);
 
-   // setting up OOCSI. processOOCSI is the name of the function to call when receiving messages, can be a random function name
-   // connect wifi and OOCSI to the server
-   oocsi.connect(OOCSIName, hostserver, ssid, password, processOOCSI);
+    // setting up OOCSI. processOOCSI is the name of the function to call when receiving messages, can be a random function name
+    // connect wifi and OOCSI to the server
+    oocsi.connect(OOCSIName, hostserver, ssid, password, processOOCSI);
 }
 
 void loop() {
-    //sensors outside
+    // sensors outside
     SonarSensor(trigPinOutside, echoPinOutside);
-    sonarOutside = distance;
-    //sensors inside
+    values[0] = distance;
+    // sensors inside
     SonarSensor(trigPinInside, echoPinInside);
-    sonarInside = distance;
+    values[1] = distance;
+    // first IR sensor
+    values[2] = digitalRead(12);
+    // first IR sensor
+    values[3] = digitalRead(14);
+    // first IR sensor
+    values[4] = digitalRead(18);
+    // first IR sensor
+    values[5] = digitalRead(19);
 
     // Prints the distance on the Serial Monitor
+    Serial.println(globalTimer);
 //    Serial.print("DistanceOut: ");
 //    Serial.println(sonarOutside);
 //    Serial.print("DistanceIn: ");
@@ -67,6 +103,85 @@ void loop() {
 //    Serial.print("IR: ");
 //    Serial.println(digitalRead(12));
 
+    globalTimer += 1;
+  
+    // corner case: more people could be seated than detected
+    inside = max(inside, nrSeated());
+
+    if(inside > 0 && !flagRaised) {
+        // if people are present, raise the flag
+        oocsi.newMessage("peekaboo_control");
+            oocsi.addString("flagUp", "");
+            oocsi.sendMessage();
+        flagRaised = true;
+    } else if (inside < 1 && flagRaised) {
+        // if no-one is present, lower the flag
+        oocsi.newMessage("peekaboo_control");
+            oocsi.addString("flagDown", "");
+            oocsi.sendMessage();
+        flagRaised = false;
+        pictureTimer = globalTimer;
+    }
+
+    if(globalTimer - pictureTimer == 100 && !flagRaised) {
+        // take a picture if the flag is down and 10 seconds have passed
+        oocsi.newMessage("peekaboo_control");
+            oocsi.addString("triggerPhoto", "");
+            oocsi.sendMessage();
+    }
+
+    if(inside > 0 && nrSeated() == 0 && !seatedTimerSet) {
+      seatedTimer = globalTimer;
+      seatedTimerSet = true;
+    } else if(inside == 0 || nrSeated() > 0) {
+      seatedTimerSet = false;
+    }
+
+    // when the seatedTimer runs for X minutes, we can conclude that nobody is present anymore
+    // thus reset the nrof people inside
+    if (seatedTimerSet && globalTimer - seatedTimer == 1200){
+        inside = 0; 
+    }
+
+    // when someone is seated for too long, we are going to wiggle the flag
+    if(seatedTooLong() && globalTimer % 50 == 0) {
+        oocsi.newMessage("peekaboo_control");
+          oocsi.addString("flagUp", "");
+          oocsi.sendMessage();
+    }
+
+    for(int i = 2; i < 6; i++) {
+        seated[i-2] = (values[i] == 0);
+    }
+    if(values[0] < LIMIT) {
+        goingInsideTimer = globalTimer;
+        dataTimer = globalTimer;
+        if(globalTimer-goingOutsideTimer <= 30 && !busy) {
+            inside = max(inside-1,0);
+            busy = true;
+        }
+    }
+
+    if(values[1] < LIMIT) {
+        goingOutsideTimer = globalTimer;
+        dataTimer = globalTimer;
+        if(globalTimer-goingInsideTimer <= 30 && !busy) {
+            inside += 1;
+            busy = true;
+        }
+    }
+
+    if(values[0] > 40 && values[1] > 40 && globalTimer-dataTimer > 10) {
+        busy = false;
+    }
+
+    if(globalTimer % 100 == 0) {
+        oocsi.newMessage("sensordata");
+        for(int i = 1; i < 7; i++) {
+            oocsi.addInt("sensorvalue" + i, values[i-1]);
+        }
+        oocsi.sendMessage();
+    }
 
     // needs to be checked in order for OOCSI to process incoming data.
     oocsi.check();
@@ -74,16 +189,39 @@ void loop() {
 }
 
 void SonarSensor(int trigPin, int echoPin) {
-  digitalWrite(trigPin,LOW);
-  delayMicroseconds(2);
-  digitalWrite(trigPin, HIGH);
-  delayMicroseconds(10);
-  digitalWrite(trigPin,LOW);
-  duration=pulseIn(echoPin, HIGH);
-  distance= duration*0.034/2;
-  delay(10);
+    digitalWrite(trigPin,LOW);
+    delayMicroseconds(2);
+    digitalWrite(trigPin, HIGH);
+    delayMicroseconds(10);
+    digitalWrite(trigPin,LOW);
+    duration=pulseIn(echoPin, HIGH);
+    distance= duration*0.034/2;
+    delay(10);
+}
+
+int nrSeated() {
+    int areSeated = 0;
+    for(int i = 0; i < 4; i++) {
+        if(seated[i]) {
+            areSeated += 1;
+            timersIR[i] = globalTimer;
+            timersIRSet[i] = true;
+        } else {
+            timersIRSet[i] = false;
+        }
+    }
+    return areSeated;
+}
+
+boolean seatedTooLong() {
+    for(int i = 0; i < 4; i++) {
+        if(timersIRSet[i] && globalTimer-timersIR[i] > TOOLONG) {
+            return true;
+        }
+    }
+    return false;
 }
 
 void processOOCSI() {
-  // don't do anything; we are sending only
+    // don't do anything; we are sending only
 }
