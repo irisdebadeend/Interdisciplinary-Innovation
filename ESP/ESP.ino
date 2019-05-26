@@ -32,7 +32,7 @@ int secondIR = 14;
 int thirdIR = 18;
 int fourthIR = 19;
 
-// defines variables
+// define variables
 long duration, distance;
 // shows which IR sensors are triggered
 boolean seated [4] = {false,false,false,false};
@@ -41,8 +41,6 @@ int inside = 0;
 boolean flagRaised = false;
 // the values of all sensors
 int values [6] = {100,100,1,1,1,1};
-// the names of all the sensors
-String names [6] = {"sonarOutside","sonarInside","firstIR","secondIR","thirdIR","fourthIR"};
 boolean busy = false;
 boolean buttonPressed = false;
 boolean isPressing = false;
@@ -64,8 +62,11 @@ boolean timersIRSet [4] = {false, false, false, false};
 #define LIMIT 40
 // the limit of seating duration
 #define TOOLONG 300
+// the time it takes to conclude no-one is present
+#define NOTPRESENT 300
 
 void setup() {
+    // define all pins
     pinMode(button, INPUT);
     pinMode(firstIR,INPUT);
     pinMode(secondIR,INPUT);
@@ -100,7 +101,7 @@ void loop() {
     // button push
     int buttonState = digitalRead(button);
 
-    // Prints the distance on the Serial Monitor
+    // Prints the timer on the Serial Monitor
     Serial.println(globalTimer);
 //    Serial.print("DistanceOut: ");
 //    Serial.println(sonarOutside);
@@ -110,6 +111,7 @@ void loop() {
 //    Serial.println(digitalRead(12));
 
     if(buttonState == HIGH && !isPressed) {
+        // if they want to turn off the camera, they push the button
         buttonPressed = !buttonPressed;
         isPressed = true;
     } else if(buttonState = LOW {
@@ -144,15 +146,17 @@ void loop() {
     }
 
     if(inside > 0 && nrSeated() == 0 && !seatedTimerSet) {
-      seatedTimer = globalTimer;
-      seatedTimerSet = true;
+        // if someone is inside but no-one is seated, set the seated timer
+        seatedTimer = globalTimer;
+        seatedTimerSet = true;
     } else if(inside == 0 || nrSeated() > 0) {
-      seatedTimerSet = false;
+        //if no-one is inside or is seated, disable the timer
+        seatedTimerSet = false;
     }
 
     // when the seatedTimer runs for X minutes, we can conclude that nobody is present anymore
     // thus reset the nrof people inside
-    if (seatedTimerSet && globalTimer - seatedTimer == 1200){
+    if (seatedTimerSet && globalTimer - seatedTimer == NOTPRESENT){
         inside = 0; 
     }
 
@@ -163,32 +167,41 @@ void loop() {
           oocsi.sendMessage();
     }
 
+    // set the seated values based on the values of the IR sensors
     for(int i = 2; i < 6; i++) {
         seated[i-2] = (values[i] == 0);
     }
     if(values[0] < LIMIT) {
+        // if someone is passing by, look which direction they are going
         goingInsideTimer = globalTimer;
         dataTimer = globalTimer;
         if(globalTimer-goingOutsideTimer <= 30 && !busy) {
+            // if the goingOutsideTimer has already been set and enough time has passed
+            // we conclude that someone is leaving
             inside = max(inside-1,0);
             busy = true;
         }
     }
 
     if(values[1] < LIMIT) {
+        // if someone is passing by, look which direction they are going
         goingOutsideTimer = globalTimer;
         dataTimer = globalTimer;
         if(globalTimer-goingInsideTimer <= 30 && !busy) {
+            // if the goingInsideTimer has already been set and enough time has passed
+            // we conclude that someone is entering
             inside += 1;
             busy = true;
         }
     }
 
-    if(values[0] > 40 && values[1] > 40 && globalTimer-dataTimer > 10) {
+    if(values[0] > LIMIT && values[1] > LIMIT && globalTimer-dataTimer > 10) {
+        // to prevent counting errors
         busy = false;
     }
 
     if(globalTimer % 100 == 0) {
+        // send the data to oocsi after every 100 loops
         oocsi.newMessage("sensordata");
         for(int i = 1; i < 7; i++) {
             oocsi.addInt("sensorvalue" + i, values[i-1]);
@@ -201,6 +214,7 @@ void loop() {
     delay(200);
 }
 
+// determine the distance towards a sensor
 void SonarSensor(int trigPin, int echoPin) {
     digitalWrite(trigPin,LOW);
     delayMicroseconds(2);
@@ -212,10 +226,12 @@ void SonarSensor(int trigPin, int echoPin) {
     delay(10);
 }
 
+// returns the number of people that are currently seated
 int nrSeated() {
     int areSeated = 0;
     for(int i = 0; i < 4; i++) {
         if(seated[i]) {
+            // if someone is seated at spot i, add it to the counter and start timer
             areSeated += 1;
             timersIR[i] = globalTimer;
             timersIRSet[i] = true;
@@ -226,9 +242,11 @@ int nrSeated() {
     return areSeated;
 }
 
+// returns is someone is seated for too long
 boolean seatedTooLong() {
     for(int i = 0; i < 4; i++) {
         if(timersIRSet[i] && globalTimer-timersIR[i] > TOOLONG) {
+            // if the timer has bypassed the limit
             return true;
         }
     }
