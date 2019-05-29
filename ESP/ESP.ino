@@ -30,7 +30,6 @@ int echoPinInside = 5;
 int firstIR = 12;
 int secondIR = 14;
 int thirdIR = 18;
-int fourthIR = 19;
 
 // define variables
 long duration, distance;
@@ -40,7 +39,7 @@ boolean seated [4] = {false,false,false,false};
 int inside = 0;
 boolean flagRaised = false;
 // the values of all sensors
-int values [6] = {100,100,1,1,1,1};
+int values [5] = {100,100,1,1,1};
 boolean busy = false;
 boolean buttonPressed = false;
 boolean isPressing = false;
@@ -52,18 +51,18 @@ int goingOutsideTimer = 0;
 int goingInsideTimer = 0;
 int seatedTimer = 0;
 int dataTimer = 0;
-int timersIR [4] = {0,0,0,0};
+int timersIR [3] = {0,0,0};
 
 // if timers are set
 boolean seatedTimerSet = false;
-boolean timersIRSet [4] = {false, false, false, false};
+boolean timersIRSet [3] = {false, false, false};
 
 // the limit for the sonar sensors
-#define LIMIT 40
+#define LIMIT 50
 // the limit of seating duration
-#define TOOLONG 300
+#define TOOLONG 6000
 // the time it takes to conclude no-one is present
-#define NOTPRESENT 300
+#define NOTPRESENT 3600
 
 void setup() {
     // define all pins
@@ -71,7 +70,6 @@ void setup() {
     pinMode(firstIR,INPUT);
     pinMode(secondIR,INPUT);
     pinMode(thirdIR,INPUT);
-    pinMode(fourthIR,INPUT);
     pinMode(trigPinOutside, OUTPUT);
     pinMode(echoPinOutside, INPUT);
     pinMode(trigPinInside, OUTPUT);
@@ -96,13 +94,20 @@ void loop() {
     values[3] = digitalRead(secondIR);
     // first IR sensor
     values[4] = digitalRead(thirdIR);
-    // first IR sensor
-    values[5] = digitalRead(fourthIR);
     // button push
     int buttonState = digitalRead(button);
 
     // Prints the timer on the Serial Monitor
+    Serial.print("GlobalTimer: ");
     Serial.println(globalTimer);
+    Serial.print("OutSensor: ");
+    Serial.println(values[0]);
+    Serial.print("InSensor: ");
+    Serial.println(values[1]);
+    Serial.println(inside);
+    Serial.println(values[2]);
+    Serial.println(values[3]);
+    Serial.println(values[4]);
 //    Serial.print("DistanceOut: ");
 //    Serial.println(sonarOutside);
 //    Serial.print("DistanceIn: ");
@@ -110,12 +115,12 @@ void loop() {
 //    Serial.print("IR: ");
 //    Serial.println(digitalRead(12));
 
-    if(buttonState == HIGH && !isPressed) {
+    if(buttonState == HIGH && !isPressing) {
         // if they want to turn off the camera, they push the button
         buttonPressed = !buttonPressed;
-        isPressed = true;
-    } else if(buttonState = LOW {
-        isPressed = false;
+        isPressing = true;
+    } else if(buttonState == LOW) {
+        isPressing = false;
     }
     
     globalTimer += 1;
@@ -123,12 +128,14 @@ void loop() {
     // corner case: more people could be seated than detected
     inside = max(inside, nrSeated());
 
-    if((inside > 0 || buttonPressed) && !flagRaised) {
+    if(inside > 0 || buttonPressed) {
+      if(!flagRaised) {
         // if people are present, raise the flag
         oocsi.newMessage("peekaboo_control");
             oocsi.addString("flagUp", "");
             oocsi.sendMessage();
         flagRaised = true;
+      }
     } else if (inside < 1 && flagRaised && !buttonPressed) {
         // if no-one is present, lower the flag
         oocsi.newMessage("peekaboo_control");
@@ -138,7 +145,7 @@ void loop() {
         pictureTimer = globalTimer;
     }
 
-    if(globalTimer - pictureTimer == 100 && !flagRaised) {
+    if(globalTimer - pictureTimer == 40 && !flagRaised) {
         // take a picture if the flag is down and 10 seconds have passed
         oocsi.newMessage("peekaboo_control");
             oocsi.addString("triggerPhoto", "");
@@ -161,7 +168,7 @@ void loop() {
     }
 
     // when someone is seated for too long, we are going to wiggle the flag
-    if(seatedTooLong() && globalTimer % 50 == 0) {
+    if(seatedTooLong()) {
         oocsi.newMessage("peekaboo_control");
           oocsi.addString("flagUp", "");
           oocsi.sendMessage();
@@ -203,9 +210,11 @@ void loop() {
     if(globalTimer % 100 == 0) {
         // send the data to oocsi after every 100 loops
         oocsi.newMessage("sensordata");
-        for(int i = 1; i < 7; i++) {
-            oocsi.addInt("sensorvalue" + i, values[i-1]);
-        }
+        oocsi.addInt("sensorvalue1", values[0]);
+        oocsi.addInt("sensorvalue2", values[1]);
+        oocsi.addInt("sensorvalue3", 5*values[2]);
+        oocsi.addInt("sensorvalue4", 10*values[3]);
+        oocsi.addInt("sensorvalue5", 15*values[4]);
         oocsi.sendMessage();
     }
 
@@ -233,7 +242,9 @@ int nrSeated() {
         if(seated[i]) {
             // if someone is seated at spot i, add it to the counter and start timer
             areSeated += 1;
-            timersIR[i] = globalTimer;
+            if(!timersIRSet[i]) {
+                timersIR[i] = globalTimer;
+            }
             timersIRSet[i] = true;
         } else {
             timersIRSet[i] = false;
