@@ -34,7 +34,7 @@ int thirdIR = 18;
 // define variables
 long duration, distance;
 // shows which IR sensors are triggered
-boolean seated [4] = {false,false,false,false};
+boolean seated [3] = {false,false,false};
 // shows how many are counted to be inside  
 int inside = 0;
 boolean flagRaised = false;
@@ -238,7 +238,7 @@ void SonarSensor(int trigPin, int echoPin) {
 // returns the number of people that are currently seated
 int nrSeated() {
     int areSeated = 0;
-    for(int i = 0; i < 4; i++) {
+    for(int i = 0; i < 3; i++) {
         if(seated[i]) {
             // if someone is seated at spot i, add it to the counter and start timer
             areSeated += 1;
@@ -255,8 +255,8 @@ int nrSeated() {
 
 // returns is someone is seated for too long
 boolean seatedTooLong() {
-    for(int i = 0; i < 4; i++) {
-        if(timersIRSet[i] && globalTimer-timersIR[i] > TOOLONG) {
+    for(int i = 0; i < 3; i++) {
+        if(timersIRSet[i] && (globalTimer-timersIR[i] > TOOLONG)) {
             // if the timer has bypassed the limit
             return true;
         }
