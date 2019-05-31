@@ -52,6 +52,7 @@ int goingInsideTimer = 0;
 int seatedTimer = 0;
 int dataTimer = 0;
 int timersIR [3] = {0,0,0};
+int pictureTimer2 = 0;
 
 // if timers are set
 boolean seatedTimerSet = false;
@@ -79,6 +80,9 @@ void setup() {
     // setting up OOCSI. processOOCSI is the name of the function to call when receiving messages, can be a random function name
     // connect wifi and OOCSI to the server
     oocsi.connect(OOCSIName, hostserver, ssid, password, processOOCSI);
+    oocsi.newMessage("peekaboo_control");
+            oocsi.addString("flagDown", "");
+            oocsi.sendMessage();
 }
 
 void loop() {
@@ -104,7 +108,8 @@ void loop() {
     Serial.println(values[0]);
     Serial.print("InSensor: ");
     Serial.println(values[1]);
-    Serial.println("Inside: " + inside);
+    Serial.print("Inside: ");
+    Serial.println(inside);
     Serial.println(values[2]);
     Serial.println(values[3]);
     Serial.println(values[4]);
@@ -143,9 +148,10 @@ void loop() {
             oocsi.sendMessage();
         flagRaised = false;
         pictureTimer = globalTimer;
+        pictureTimer2 = globalTimer;
     }
 
-    if(globalTimer - pictureTimer == 40 && !flagRaised) {
+    if((globalTimer - pictureTimer == 40 || globalTimer - pictureTimer2 == 7200) && !flagRaised) {
         // take a picture if the flag is down and 10 seconds have passed
         oocsi.newMessage("peekaboo_control");
             oocsi.addString("triggerPhoto", "");
